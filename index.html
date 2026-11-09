@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>El Enigma del Río y la Presa</title>
+    <style>
+        :root {
+            --agua: #3498db;
+            --agua-hover: #85c1e9;
+            --muro: #8d6e63;
+            --muro-hover: #bcaaa4;
+            --vacio: #ecf0f1;
+            --vacio-hover: #bdc3c7;
+            --fondo: #2c3e50;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--fondo);
+            color: white;
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            gap: 3rem;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .panel-instrucciones {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2.5rem;
+            border-radius: 16px;
+            backdrop-filter: blur(10px);
+            width: 350px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 2.2rem;
+            text-align: center;
+            color: #f1c40f;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .reto-box {
+            background: rgba(231, 76, 60, 0.2);
+            border-left: 5px solid #e74c3c;
+            padding: 1rem;
+            margin: 1.5rem 0;
+            font-size: 1.2rem;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .leyenda {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+        
+        .indicador-turno {
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 2rem;
+            transition: all 0.3s ease;
+        }
+
+        .turno-agua { background-color: var(--agua); color: white; }
+        .turno-muro { background-color: var(--muro); color: white; }
+
+        .contenedor-tablero {
+            position: relative;
+            width: 800px;
+            height: 550px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 20px;
+            padding: 2rem;
+            /* Eliminamos las líneas rectas antiguas */
+        }
+
+        .tablero {
+            position: relative;
+            /* Desplazamos un poco el tablero para hacer sitio a los bordes hexagonales */
+            transform: translate(110px, 60px);
+            z-index: 10;
+        }
+
+        .hex {
+            position: absolute;
+            width: 44px; 
+            height: 50px; 
+            background-color: var(--vacio);
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            transition: all 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transform: scale(0.92); /* Crea los surcos entre casillas */
+        }
+
+        /* Casillas de los bordes fijos (no interactuables) */
+        .hex.borde-agua { background-color: var(--agua); cursor: default; }
+        .hex.borde-muro { background-color: var(--muro); cursor: default; }
+
+        /* Casillas jugables (interactuables) */
+        .hex.jugable { cursor: pointer; }
+        .hex.jugable:hover { transform: scale(1.05); z-index: 10; background-color: var(--vacio-hover); }
+        
+        .hex.agua { background-color: var(--agua); }
+        .hex.agua:hover { background-color: var(--agua-hover); }
+        
+        .hex.muro { background-color: var(--muro); }
+        .hex.muro:hover { background-color: var(--muro-hover); }
+
+        .hex.ganador {
+            animation: latido 1.5s infinite;
+            z-index: 20;
+            box-shadow: 0 0 20px rgba(255,255,255,0.8);
+            filter: brightness(1.3);
+            transform: scale(1.05);
+        }
+
+        @keyframes latido {
+            0% { transform: scale(1.05); }
+            50% { transform: scale(1.15); }
+            100% { transform: scale(1.05); }
+        }
+
+        /* Oscurecer el resto al ganar para destacar el camino */
+        .tablero.terminado .hex.jugable:not(.ganador) {
+            opacity: 0.4;
+            filter: grayscale(80%);
+        }
+
+        button.reinicio {
+            width: 100%;
+            padding: 1rem;
+            margin-top: 1rem;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            background: #27ae60;
+            color: white;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button.reinicio:hover { background: #2ecc71; }
+        
+        #overlay-victoria {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            border-radius: 20px;
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+        #overlay-victoria.visible { visibility: visible; opacity: 1; }
+        .mensaje-victoria { font-size: 2.5rem; text-align: center; color: white; margin-bottom: 2rem; padding: 0 2rem;}
+        .topologia-nota { font-size: 1.2rem; color: #f1c40f; font-style: italic; max-width: 80%; text-align: center;}
+
+    </style>
+</head>
+<body>
+
+    <div class="panel-instrucciones">
+        <h1>El Enigma del Río</h1>
+        
+        <div class="reto-box">
+            <strong>EL RETO IMPOSIBLE:</strong><br>
+            Jugad colaborando. Vuestro único objetivo es <b>EMPATAR</b> el juego llenando todo el tablero.
+        </div>
+
+        <p>Reglas físicas de la naturaleza:</p>
+        <div class="leyenda">
+            <div style="width:20px; height:20px; background:var(--agua); border-radius:50%; clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);"></div>
+            El Río fluye de Norte a Sur.
+        </div>
+        <div class="leyenda">
+            <div style="width:20px; height:20px; background:var(--muro); border-radius:50%; clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);"></div>
+            El Muro bloquea de Este a Oeste.
+        </div>
+
+        <div id="indicadorTurno" class="indicador-turno turno-agua">
+            Turno: Agua (Río)
+        </div>
+
+        <button class="reinicio" onclick="iniciarJuego()">Resetear Tablero</button>
+    </div>
+
+    <div class="contenedor-tablero">
+        <!-- El tablero se genera íntegramente por JS -->
+        <div class="tablero" id="tablero"></div>
+
+        <div id="overlay-victoria">
+            <div class="mensaje-victoria" id="texto-victoria"></div>
+            <div class="topologia-nota">¡Demostración topológica completada!<br>Es matemáticamente imposible que el agua no cruce sin que el muro esté completamente cerrado. ¡El empate no existe!</div>
+        </div>
+    </div>
+
+    <script>
+        const SIZE = 11;
+        const R = 25; 
+        const W = Math.sqrt(3) * R; 
+        const H = 2 * R;            
+        const X_OFFSET = W;
+        const Y_OFFSET = 0.75 * H;  
+
+        let turno = 1; 
+        let tableroLogico = [];
+        let juegoTerminado = false;
+
+        function iniciarJuego() {
+            const contenedor = document.getElementById('tablero');
+            contenedor.innerHTML = '';
+            contenedor.classList.remove('terminado');
+            tableroLogico = [];
+            juegoTerminado = false;
+            turno = 1;
+            actualizarIndicador();
+            document.getElementById('overlay-victoria').classList.remove('visible');
+
+            // Ampliamos el bucle de -1 a SIZE para dibujar el borde perimetral
+            for (let r = -1; r <= SIZE; r++) {
+                if (r >= 0 && r < SIZE) {
+                    tableroLogico[r] = [];
+                }
+
+                for (let c = -1; c <= SIZE; c++) {
+                    if (r >= 0 && r < SIZE && c >= 0 && c < SIZE) {
+                        tableroLogico[r][c] = 0;
+                    }
+
+                    // Ignorar las 4 esquinas exteriores absolutas para mantener la forma de rombo
+                    if ((r === -1 && c === -1) || (r === -1 && c === SIZE) || 
+                        (r === SIZE && c === -1) || (r === SIZE && c === SIZE)) {
+                        continue;
+                    }
+                    
+                    const hex = document.createElement('div');
+                    hex.className = 'hex';
+                    
+                    const posX = c * X_OFFSET + r * (X_OFFSET / 2);
+                    const posY = r * Y_OFFSET;
+                    
+                    hex.style.left = `${posX}px`;
+                    hex.style.top = `${posY}px`;
+                    
+                    // Asignación de colores para los bordes vs casillas jugables
+                    if (r === -1 || r === SIZE) {
+                        hex.classList.add('borde-agua');
+                    } else if (c === -1 || c === SIZE) {
+                        hex.classList.add('borde-muro');
+                    } else {
+                        hex.dataset.r = r;
+                        hex.dataset.c = c;
+                        hex.classList.add('jugable');
+                        hex.addEventListener('click', () => jugar(r, c, hex));
+                    }
+
+                    contenedor.appendChild(hex);
+                }
+            }
+        }
+
+        function jugar(r, c, hexElement) {
+            if (juegoTerminado || tableroLogico[r][c] !== 0) return;
+
+            tableroLogico[r][c] = turno;
+            hexElement.classList.add(turno === 1 ? 'agua' : 'muro');
+            hexElement.classList.remove('jugable'); // Ya no reacciona al hover
+
+            const camino = buscarCaminoGanador(turno);
+            if (camino) {
+                juegoTerminado = true;
+                resaltarCamino(camino);
+                mostrarVictoria();
+                return;
+            }
+
+            turno = turno === 1 ? 2 : 1;
+            actualizarIndicador();
+        }
+
+        function actualizarIndicador() {
+            const ind = document.getElementById('indicadorTurno');
+            if (turno === 1) {
+                ind.className = 'indicador-turno turno-agua';
+                ind.innerText = 'Turno: Agua fluye';
+            } else {
+                ind.className = 'indicador-turno turno-muro';
+                ind.innerText = 'Turno: Muro bloquea';
+            }
+        }
+
+        function mostrarVictoria() {
+            const overlay = document.getElementById('overlay-victoria');
+            const texto = document.getElementById('texto-victoria');
+            
+            if (turno === 1) {
+                texto.innerHTML = "¡FRACASO DEL EMPATE!<br><span style='color:var(--agua)'>El Río cruzó la presa.</span>";
+            } else {
+                texto.innerHTML = "¡FRACASO DEL EMPATE!<br><span style='color:var(--muro)'>El Muro bloqueó el paso del agua.</span>";
+            }
+            
+            setTimeout(() => overlay.classList.add('visible'), 1000);
+        }
+
+        function buscarCaminoGanador(jugador) {
+            let queue = [];
+            let visitados = new Set();
+            let padres = new Map();
+
+            for (let i = 0; i < SIZE; i++) {
+                let r = jugador === 1 ? 0 : i;
+                let c = jugador === 1 ? i : 0;
+                
+                if (tableroLogico[r][c] === jugador) {
+                    let id = `${r},${c}`;
+                    queue.push({r, c});
+                    visitados.add(id);
+                    padres.set(id, null);
+                }
+            }
+
+            const direcciones = [
+                {dr: 0, dc: -1}, {dr: 0, dc: 1},
+                {dr: -1, dc: 0}, {dr: -1, dc: 1},
+                {dr: 1, dc: -1}, {dr: 1, dc: 0}
+            ];
+
+            while (queue.length > 0) {
+                let actual = queue.shift();
+
+                if ((jugador === 1 && actual.r === SIZE - 1) || (jugador === 2 && actual.c === SIZE - 1)) {
+                    let camino = [];
+                    let currId = `${actual.r},${actual.c}`;
+                    while (currId) {
+                        camino.push(currId);
+                        currId = padres.get(currId);
+                    }
+                    return camino;
+                }
+
+                for (let dir of direcciones) {
+                    let nr = actual.r + dir.dr;
+                    let nc = actual.c + dir.dc;
+
+                    if (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE) {
+                        if (tableroLogico[nr][nc] === jugador) {
+                            let vecId = `${nr},${nc}`;
+                            if (!visitados.has(vecId)) {
+                                visitados.add(vecId);
+                                padres.set(vecId, `${actual.r},${actual.c}`);
+                                queue.push({r: nr, c: nc});
+                            }
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        function resaltarCamino(caminoIds) {
+            const tableroEl = document.getElementById('tablero');
+            tableroEl.classList.add('terminado');
+
+            const hexes = document.querySelectorAll('.hex.jugable, .hex.agua, .hex.muro');
+            hexes.forEach(hex => {
+                const id = `${hex.dataset.r},${hex.dataset.c}`;
+                if (caminoIds.includes(id)) {
+                    hex.classList.add('ganador');
+                }
+            });
+        }
+
+        window.onload = iniciarJuego;
+    </script>
+</body>
+</html>
